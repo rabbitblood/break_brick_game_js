@@ -1,4 +1,4 @@
-
+//currently using "tsc ./break_brick_game_js/index.ts" in terminal to generate js file
 //init canvas
 const canvas = <HTMLCanvasElement>document.getElementById("mainCanvas");
 if (canvas == null) {
@@ -19,6 +19,7 @@ let isPlayerMovingLeft = false;
 let isPlayerMovingRight = false;
 let playerNumber = 1;
 
+let gameObjectColliderArray: ICollidable[] = [];
 let ballArray: circle[] = [];
 
 enum GameObjectType {
@@ -34,12 +35,61 @@ interface IGameObject {
     yPos: number;
 }
 
+/**
+ * @interface ICollidable
+ * @description interface for all collidable objects, its hard to do collision with all kinda shapes,
+ *              so we will use rectangle for all collidable objects
+ */
 interface ICollidable {
     width: number;
     height: number;
     gameObjectType: GameObjectType;
     isColliding(collidable: ICollidable): boolean;
     gameObject: IGameObject;
+}
+
+class brick implements ICollidable, IGameObject {
+    name: string;
+    xPos: number;
+    yPos: number;
+    width: number;
+    height: number;
+    gameObjectType: GameObjectType;
+    gameObject: IGameObject;
+
+    /**
+     * @param yPos
+     * @param xPos
+     * @param width
+     * @param height
+     */
+    constructor(yPos: number, xPos: number, width: number, height: number) {
+        this.xPos = xPos;
+        this.yPos = yPos;
+        this.width = width;
+        this.height = height;
+        this.gameObjectType = GameObjectType.brick;
+        this.name = "brick";
+        this.gameObject = this;
+    }
+
+    drawThis(canvasContext) {
+        canvasContext.beginPath();
+        canvasContext.moveTo(this.yPos, this.yPos)
+        canvasContext.rect(this.xPos, this.yPos, this.width, this.height);
+        canvasContext.fill();
+    }
+
+    isColliding(collidable: ICollidable): boolean {
+        if (this.xPos < collidable.gameObject.xPos + collidable.width &&
+            this.xPos + this.width > collidable.gameObject.xPos &&
+            this.yPos < collidable.gameObject.yPos + collidable.height &&
+            this.yPos + this.height > collidable.gameObject.yPos) {
+            return true;
+        }
+        return false;
+    }
+
 }
 
 class circle implements ICollidable, IGameObject {
@@ -53,6 +103,7 @@ class circle implements ICollidable, IGameObject {
     movingDirectionX: number;
     movingDirectionY: number;
     gameObject: IGameObject;
+    lastCollidedObject: ICollidable;
 
     /**
      * @param yPos 
@@ -98,23 +149,29 @@ class circle implements ICollidable, IGameObject {
     }
 
     isColliding(collidable: ICollidable): boolean {
-        if (this.xPos < collidable.gameObject.xPos + collidable.width &&
-            this.xPos + this.width > collidable.gameObject.xPos &&
-            this.yPos < collidable.gameObject.yPos + collidable.height &&
-            this.yPos + this.height > collidable.gameObject.yPos) {
+        if (this.xPos <= collidable.gameObject.xPos + collidable.width &&
+            this.xPos + this.width >= collidable.gameObject.xPos &&
+            this.yPos <= collidable.gameObject.yPos + collidable.height &&
+            this.yPos + this.height >= collidable.gameObject.yPos) {
             return true;
         }
         return false;
     }
 
     collissionHandler(collidable: ICollidable) {
-        if (this.isColliding(collidable)) {
+        //make sure not to collide with itself
+        if(collidable == this || collidable == this.lastCollidedObject){
+            return;
+        }
+
+        if (this.isColliding(collidable)) 
+        {
+            this.lastCollidedObject = collidable;
             if (collidable.gameObjectType == GameObjectType.player) {
                 //if the ball is colliding with the player, the ball flying direction will be changed
                 //the ball will be flying to the position based on where it collides with the player
-                //the ball will be flying to the left if the collision is on the left side of the player based on the center of the player
-                //the ball will be flying to the right if the collision is on the right side of the player based on the center of the player
                 let player = <playerBoard>collidable;
+
                 if(player.name == "player 1" || player.name == "player 3")
                 {
                     this.movingDirectionX = ((this.xPos + this.width / 2) - (player.xPos + player.displayWidth / 2)) / (player.width / 2);
@@ -126,6 +183,45 @@ class circle implements ICollidable, IGameObject {
                     this.movingDirectionY = ((this.yPos + this.height / 2) - (player.yPos + player.displayHeight / 2)) / (player.height / 2);
                 }
                 
+            }
+            else if (collidable.gameObjectType == GameObjectType.circle) // doesnt seem to work that way
+            {
+                //the ball will change the moving direction based on the x or y axis of the ball it collides with
+                this.movingDirectionX = ((this.xPos + this.width / 2) - (collidable.gameObject.xPos + collidable.width / 2)) / (collidable.width / 2);
+                this.movingDirectionY = ((this.yPos + this.height / 2) - (collidable.gameObject.yPos + collidable.height / 2)) / (collidable.height / 2);
+            }
+            else{
+                //the ball will flip the moving direction based on the x or y axis it collides with
+
+                //find out which face did this ball hit
+                // find the difference between the center of the ball and the center of the colliding object
+                let dx = (this.xPos + this.width / 2) - (collidable.gameObject.xPos + collidable.width / 2);
+                let dy = (this.yPos + this.height / 2) - (collidable.gameObject.yPos + collidable.height / 2);
+
+                // find the absolute differences between the x and y positions
+                let absDx = Math.abs(dx);
+                let absDy = Math.abs(dy);
+
+                // check which face the ball hit based on which absolute difference is larger
+                if (absDx > absDy) {
+                    // ball hit either left or right face of colliding object
+                    if (dx < 0) {
+                        // ball hit right face of colliding object
+                        this.movingDirectionX = -this.movingDirectionX;
+                    } else {
+                        // ball hit left face of colliding object
+                        this.movingDirectionX = Math.abs(this.movingDirectionX);
+                    }
+                } else {
+                    // ball hit either top or bottom face of colliding object
+                    if (dy < 0) {
+                        // ball hit bottom face of colliding object
+                        this.movingDirectionY = -this.movingDirectionY;
+                    } else {
+                        // ball hit top face of colliding object
+                        this.movingDirectionY = Math.abs(this.movingDirectionY);
+                    }
+                }
             }
         }
     }
@@ -164,7 +260,7 @@ class playerBoard implements ICollidable, IGameObject {
 
         //尝试用图片的宽高来控制板子的宽高 但是失败了 所以直接hardcode了， 
         //之后如果要改图片的话，需要重新hardcode 或者找到更好的方法
-        //tried to do this.imageWidth = img.naturalWidth; but failed, its value is 0, so I hardcode it
+        //tried to do this.imageWidth = img.naturalWidth; but failed, its value is 0 even though the image element does have naturalWidth
         const boardImageWidth = 360;
         const boardImageHeight = 180;
 
@@ -250,11 +346,19 @@ class playerBoard implements ICollidable, IGameObject {
 
 }
 
-
-async function main() {
+function main() {
     let player = new playerBoard(playerNumber, canvas); // test player board, will be replace by a function or listener to do it
-    const timer = 200;
+    gameObjectColliderArray.push(player);
+    const timer = 500;
     let currentTimer = 0;
+
+    const testBrickArray: brick[] = [];
+
+    let testBrick1 = new brick(100, 100, 50, 50); testBrickArray.push(testBrick1); gameObjectColliderArray.push(testBrick1);
+    let testBrick2 = new brick(200, 200, 50, 50); testBrickArray.push(testBrick2); gameObjectColliderArray.push(testBrick2);
+    let testBrick3 = new brick(300, 300, 50, 50); testBrickArray.push(testBrick3); gameObjectColliderArray.push(testBrick3);
+    let testBrick4 = new brick(400, 400, 50, 50); testBrickArray.push(testBrick4); gameObjectColliderArray.push(testBrick4);
+
 
 
     setInterval(() => {
@@ -262,7 +366,7 @@ async function main() {
         window.requestAnimationFrame(() => {
             
             if (ctx == undefined) {
-                return;
+                throw new Error("ctx is undefined");
             }
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -275,17 +379,26 @@ async function main() {
             ctx.fill();
             ctx.fillStyle = "black";
 
-            //call shootCircleFromTop() every 2 sec
+            //call shootCircleFromTop() every .5 sec
             if (currentTimer >= timer) {
                 currentTimer = 0;
                 shootCircleFromTop();
             }
+            //draw all test bricks
+            ctx.fillStyle = "red";
+            for (let i = 0; i < testBrickArray.length; i++) {
+                testBrickArray[i].drawThis(ctx);
+            }
+            ctx.fillStyle = "black";
 
             //drwa all circles
             for (let i = 0; i < ballArray.length; i++) {
-                ballArray[i].drawThis(ctx);
-                ballArray[i].collissionHandler(player);
+                
                 ballArray[i].move();
+                ballArray[i].drawThis(ctx);
+                for(let j = 0; j < gameObjectColliderArray.length; j++) {
+                    ballArray[i].collissionHandler(gameObjectColliderArray[j]);
+                }
             }
 
             //draw player
@@ -361,6 +474,7 @@ function shootCircleFromTop() {
     let testC = new circle(250, 250, 5);
     testC.SetMovingdirection(1,0);
     ballArray.push(testC);
+    gameObjectColliderArray.push(testC);
 }
 
 
