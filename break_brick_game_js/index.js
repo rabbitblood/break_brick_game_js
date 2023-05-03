@@ -239,19 +239,20 @@ async function main() {
 
 
 addEventListener("keydown", (e) => {
-    if (e.key == "a") {
+    console.log(e.key);
+    if (e.key == "a" || e.key == "ArrowLeft") {
         isPlayerMovingLeft = true;
     }
-    else if (e.key == "d") {
+    else if (e.key == "d" || e.key == "ArrowRight") {
         isPlayerMovingRight = true;
     }
 })
 
 addEventListener("keyup", (e) => {
-    if (e.key == "a") {
+    if (e.key == "a" || e.key == "ArrowLeft") {
         isPlayerMovingLeft = false;
     }
-    else if (e.key == "d") {
+    else if (e.key == "d" || e.key == "ArrowRight") {
         isPlayerMovingRight = false;
     }
 })
